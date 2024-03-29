@@ -1,15 +1,19 @@
 import json
 import os
+import logging
 
 import requests
 from nacl.signing import VerifyKey
 
+logger = logging.getLogger()
 DISCORD_ENDPOINT = "https://discord.com/api/v8"
+with open('.env.json') as f:
+    env_vars = json.load(f)
 
-DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-APPLICATION_ID = os.getenv('APPLICATION_ID')
-APPLICATION_PUBLIC_KEY = os.getenv('APPLICATION_PUBLIC_KEY')
-COMMAND_GUILD_ID = os.getenv('COMMAND_GUILD_ID')
+DISCORD_TOKEN = env_vars['SlashCommandsCallbackFunction']['DISCORD_TOKEN']
+APPLICATION_ID = env_vars['SlashCommandsCallbackFunction']['APPLICATION_ID']
+APPLICATION_PUBLIC_KEY = env_vars['SlashCommandsCallbackFunction']['APPLICATION_PUBLIC_KEY']
+COMMAND_GUILD_ID = env_vars['SlashCommandsCallbackFunction']['COMMAND_GUILD_ID']
 
 verify_key = VerifyKey(bytes.fromhex(APPLICATION_PUBLIC_KEY))
 
@@ -30,6 +34,8 @@ def registerCommands():
                 }
             ]
         }
+
+
     ]
 
     headers = {
@@ -53,6 +59,7 @@ def verify(signature: str, timestamp: str, body: str) -> bool:
 def callback(event: dict, context: dict):
     # API Gateway has weird case conversion, so we need to make them lowercase.
     # See https://github.com/aws/aws-sam-cli/issues/1860
+    logger.debug("呼び出しに成功")
     headers: dict = { k.lower(): v for k, v in event['headers'].items() }
     rawBody: str = event['body']
 
@@ -67,10 +74,10 @@ def callback(event: dict, context: dict):
             "headers": {},
             "body": ""
         }
-    
+    logger.debug("認証に成功")
     req: dict = json.loads(rawBody)
     if req['type'] == 1: # InteractionType.Ping
-        registerCommands()
+        # registerCommands()
         return {
             "type": 1 # InteractionResponseType.Pong
         }
@@ -88,3 +95,28 @@ def callback(event: dict, context: dict):
                 "content": text
             }
         }
+registerCommands()
+
+        # {
+        #     "name": "add",
+        #     "description": "タスクを追加します",
+        #     "options": [
+        #         {
+        #             "type": 3, # ApplicationCommandOptionType.STRING
+        #             "name": "task",
+        #             "description": "タスクの内容を入力してください",
+        #             "required": True
+        #         },
+        #         {
+        #             "type": 4, # ApplicationCommandOptionType.INTEGER
+        #             "name": "deadline",
+        #             "description": "タスクの期限をYYYYMMDDで入力してください",
+        #             "required": True
+        #         }
+        #     ]
+        # },
+        # {
+        #     "type": 6,
+        #     "name": "list",
+        #     "description": "その人の直近の担当タスクを表示します．",
+        # }
