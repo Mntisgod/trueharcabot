@@ -1,5 +1,6 @@
-# discord-slash-commands-helloworld
+# HARCA-bot
 
+FORK元:
 [Slash CommandsでサーバレスなDiscordアプリを作る ｜ loop.run_forever()](https://note.sarisia.cc/entry/discord-slash-commands/)
 
 ## Run locally
