@@ -10,12 +10,13 @@ DISCORD_ENDPOINT = "https://discord.com/api/v8"
 with open('.env.json') as f:
     env_vars = json.load(f)
 
-DISCORD_TOKEN = env_vars['SlashCommandsCallbackFunction']['DISCORD_TOKEN']
-APPLICATION_ID = env_vars['SlashCommandsCallbackFunction']['APPLICATION_ID']
-APPLICATION_PUBLIC_KEY = env_vars['SlashCommandsCallbackFunction']['APPLICATION_PUBLIC_KEY']
-COMMAND_GUILD_ID = env_vars['SlashCommandsCallbackFunction']['COMMAND_GUILD_ID']
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+APPLICATION_ID = os.getenv('APPLICATION_ID')
+APPLICATION_PUBLIC_KEY = os.getenv('APPLICATION_PUBLIC_KEY')
+COMMAND_GUILD_ID = os.getenv('COMMAND_GUILD_ID')
 
 verify_key = VerifyKey(bytes.fromhex(APPLICATION_PUBLIC_KEY))
+
 
 def registerCommands():
     endpoint = f"{DISCORD_ENDPOINT}/applications/{APPLICATION_ID}/guilds/{COMMAND_GUILD_ID}/commands"
@@ -33,15 +34,27 @@ def registerCommands():
                     "required": False
                 }
             ]
-        }
+        },
+        {
+            "name": "point",
+            "description": "人権ポイントを表示します",
+            "options": [
+                {
+                    "type": 6, # ApplicationCommandOptionType.USER
+                    "name": "user",
+                    "description": "人権ポイントを表示するユーザー",
+                    "required": True
+                }
+            ]
 
+        }
 
     ]
 
     headers = {
         "User-Agent": "discord-slash-commands-helloworld",
         "Content-Type": "application/json",
-        "Authorization": DISCORD_TOKEN
+        "Authorization": "Bot " + DISCORD_TOKEN
     }
 
     for c in commands:
@@ -62,7 +75,8 @@ def callback(event: dict, context: dict):
     logger.debug("呼び出しに成功")
     headers: dict = { k.lower(): v for k, v in event['headers'].items() }
     rawBody: str = event['body']
-
+    print(headers)
+    print(event)
     # validate request
     signature = headers.get('x-signature-ed25519')
     timestamp = headers.get('x-signature-timestamp')
@@ -76,18 +90,35 @@ def callback(event: dict, context: dict):
         }
     logger.debug("認証に成功")
     req: dict = json.loads(rawBody)
+    registerCommands()
     if req['type'] == 1: # InteractionType.Ping
-        # registerCommands()
         return {
             "type": 1 # InteractionResponseType.Pong
         }
     elif req['type'] == 2: # InteractionType.ApplicationCommand
         # command options list -> dict
         opts = {v['name']: v['value'] for v in req['data']['options']} if 'options' in req['data'] else {}
+        for v in opts.values():
+            print(v)
 
-        text = "Hello!"
-        if 'user' in opts:
-            text = f"Hello, <@{opts['user']}>!"
+        # スラッシュコマンドごとの処理
+        if req['data']['name'] == "hello":  # "/hello" コマンドの処理
+            text = "Hello!"
+            if 'user' in opts:
+                if opts['user'] == APPLICATION_ID:
+                    text = "こんにちは、朕の名前は鬮ｮｻ髯句ｹ鬯ｾｾです"
+                else:
+                    text = f"Hello, <@{opts['user']}>!"
+
+        elif req['data']['name'] == "point":  # 他のスラッシュコマンドの処理
+            # 他のコマンドに応じた処理を記述
+            if 'user' in opts:
+                if opts['user'] == APPLICATION_ID:
+                    text = "朕の人権ポイントは3ポイント！"
+                else:
+                    text = f"<@{opts['user']}>の人権ポイントは0ポイント！"
+        else:
+            text = "Unknown command"
 
         return {
             "type": 4, # InteractionResponseType.ChannelMessageWithSource
@@ -95,28 +126,18 @@ def callback(event: dict, context: dict):
                 "content": text
             }
         }
-registerCommands()
+    else:
+        return {
+            "type": 4, # InteractionResponseType.ChannelMessageWithSource
+            "data": {
+                "content": "Unknown request"
+            }
+        }
 
-        # {
-        #     "name": "add",
-        #     "description": "タスクを追加します",
-        #     "options": [
-        #         {
-        #             "type": 3, # ApplicationCommandOptionType.STRING
-        #             "name": "task",
-        #             "description": "タスクの内容を入力してください",
-        #             "required": True
-        #         },
-        #         {
-        #             "type": 4, # ApplicationCommandOptionType.INTEGER
-        #             "name": "deadline",
-        #             "description": "タスクの期限をYYYYMMDDで入力してください",
-        #             "required": True
-        #         }
-        #     ]
-        # },
-        # {
-        #     "type": 6,
-        #     "name": "list",
-        #     "description": "その人の直近の担当タスクを表示します．",
-        # }
+
+async def point(userId: int):
+    pass
+
+
+async def add(userId: int, task: str, deadline: str):
+    pass
