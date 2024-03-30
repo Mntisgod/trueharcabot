@@ -1,0 +1,24 @@
+{
+    "name": "hello",
+    "description": "Hello Discord Slash Commands!",
+    "options": [
+        {
+            "type": 6, 
+            "name": "user",
+            "description": "Who to say hello?",
+            "required": false
+        }
+    ]
+}
+{
+    "name": "point",
+    "description": "人権ポイントを発表します",
+    "options": [
+        {
+            "type": 6, // 6 はユーザー
+            "name": "user",
+            "description": "誰の人権ポイントを表示しますか？",
+            "required": true
+        }
+    ]
+}
