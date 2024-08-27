@@ -14,98 +14,37 @@ import datetime
 
 logger = logging.getLogger()
 
-DISCORD_ENDPOINT = "https://discord.com/api/v8"
+DISCORD_ENDPOINT = "https://discord.com/api/v10"
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 APPLICATION_ID = os.getenv('APPLICATION_ID')
 APPLICATION_PUBLIC_KEY = os.getenv('APPLICATION_PUBLIC_KEY')
 COMMAND_GUILD_ID = os.getenv('COMMAND_GUILD_ID')
+NOTION_TOKEN = os.getenv('NOTION_TOKEN')
+DATABASE_ID = os.getenv('NOTION_DATABASE_ID')
 
 verify_key = VerifyKey(bytes.fromhex(APPLICATION_PUBLIC_KEY))
-
-
-def get_spreadsheet():
-    """
-    スプレッドシートとの連携の関数
-    :return: ワークシート
-    """
-    # ここから編集
-    keyfile_path = "task-411115-e893c6720e2f.json" # 秘密鍵のjsonのパスを記入
-    SPREADSHEET_KEY = '1Lhfj1P14OAorKR8xqMydTSXm7PqOJ5-M46ftjLF_LJQ' # 転記したいワークブックのIDを記入
-    # ここまで
-    # 2つのAPIを記述しないとリフレッシュトークンを3600秒毎に発行し続けなければならない
-    scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
-
-    # 認証情報設定
-    # ダウンロードしたjsonファイル名をクレデンシャル変数に設定（秘密鍵、Pythonファイルから読み込みしやすい位置に置く）
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(keyfile_path, scope)
-
-    # OAuth2の資格情報を使用してGoogle APIにログインします。
-    gc = gspread.authorize(credentials)
-
-    # 共有設定したスプレッドシートキーを使って、スプレッドシートを開く
-    workbook = gc.open_by_key(SPREADSHEET_KEY)
-    worksheet = workbook.worksheet('日報')
-    return worksheet
 
 
 def registerCommands():
     endpoint = f"{DISCORD_ENDPOINT}/applications/{APPLICATION_ID}/guilds/{COMMAND_GUILD_ID}/commands"
     print(f"registering commands: {endpoint}")
-
-    commands = [
-        {
-            "name": "hello",
-            "description": "Hello Discord Slash Commands!",
-            "options": [
-                {
-                    "type": 6, # ApplicationCommandOptionType.USER
-                    "name": "user",
-                    "description": "Who to say hello?",
-                    "required": False
-                }
-            ]
-        },
-        {
-            "name": "point",
-            "description": "人権ポイントを表示します",
-            "options": [
-                {
-                    "type": 6, # ApplicationCommandOptionType.USER
-                    "name": "user",
-                    "description": "人権ポイントを表示するユーザー",
-                    "required": True
-                }
-            ]
-        },
-        {
-            "name": "report",
-            "description": "日報を登録します",
-            "options": [
-                {
-                    "type": 3,  # ApplicationCommandOptionType.STRING
-                    "name": "content",
-                    "description": "日報の内容",
-                    "required": True
-                },
-                {
-                    "type": 3,  # ApplicationCommandOptionType.STRING
-                    "name": "comment",
-                    "description": "コメント",
-                    "required": False
-                }
-            ]
-        }
-
-    ]
+    # commands.json からコマンドを読み込む
+    commands = json.load(open('commands.json', 'r'))
 
     headers = {
         "User-Agent": "discord-slash-commands-helloworld",
         "Content-Type": "application/json",
         "Authorization": "Bot " + DISCORD_TOKEN
     }
+    print(headers)
 
-    for c in commands:
-        requests.post(endpoint, headers=headers, json=c).raise_for_status()
+    try:
+        for c in commands:
+            requests.post(endpoint, headers=headers, json=c).raise_for_status()
+    except Exception as e:
+        print(f"Failed to register commands: {e}")
+        return False
+
 
 def verify(signature: str, timestamp: str, body: str) -> bool:
     try:
@@ -115,6 +54,7 @@ def verify(signature: str, timestamp: str, body: str) -> bool:
         return False
 
     return True
+
 
 def callback(event: dict, context: dict):
     # API Gateway has weird case conversion, so we need to make them lowercase.
@@ -134,31 +74,15 @@ def callback(event: dict, context: dict):
         }
     req: dict = json.loads(rawBody)
 
-    # registerCommands()
-    if req['type'] == 1: # InteractionType.Ping
+    if req['type'] == 1:  # InteractionType.Ping
         return {
-            "type": 1 # InteractionResponseType.Pong
+            "type": 1  # InteractionResponseType.Pong
         }
     elif req['type'] == 2: # InteractionType.ApplicationCommand
         # command options list -> dict
         opts = {v['name']: v['value'] for v in req['data']['options']} if 'options' in req['data'] else {}
 
-        # スラッシュコマンドごとの処理
-        if req['data']['name'] == "report":  # "" コマンドの処理
-            sheet = get_spreadsheet()
-            date = datetime.datetime.now().strftime('%Y/%m/%d')
-            username = req['member']['user']['username']
-            content = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'content'), None)
-            comment = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'comment'), None)
-            data_list = [[date, username, content, comment]]
-            is_succeeded = set_values_to_ss(sheet, data_list)
-            print(is_succeeded)
-            if is_succeeded:
-                text = "日報を登録しました"
-            else:
-                text = "日報の登録に失敗しました"
-
-        elif req['data']['name'] == "point":  # "/point" コマンドの処理
+        if req['data']['name'] == "point":  # "/point" コマンドの処理
             # 他のコマンドに応じた処理を記述
             if 'user' in opts:
                 if opts['user'] == APPLICATION_ID:
@@ -168,50 +92,102 @@ def callback(event: dict, context: dict):
 
         elif req['data']['name'] == "hello":  # "/hello" コマンドの処理
             text = "Hello!"
+            registerCommands()
             if 'user' in opts:
                 if opts['user'] == APPLICATION_ID:
                     text = "こんにちは、朕の名前は鬮ｮｻ髯句ｹ鬯ｾｾです"
                 else:
                     text = f"Hello, <@{opts['user']}>!"
+
+        elif req['data']['name'] == "task":  # "/task" コマンドの処理
+            is_department_designated = True
+            is_assignee_designated = True
+            is_deadline_designated = True
+            content = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'content'), None)
+            assignee = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'assignee'), None)
+            deadline_str = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'deadline'), None)
+            department = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'department'), None)
+            status = next((opt['value'] for opt in req['data']['options'] if opt['name'] == 'status'), None)
+            print(content, assignee, deadline_str, department, status)
+            # statusとdepartmentがない場合はデフォルト値を設定
+            if status is None or str(status) == "":
+                status = "未着手"
+            if department is None or str(department) == "":
+                is_department_designated = False
+            if assignee is None or str(assignee) == "":
+                is_assignee_designated = False
+            if deadline_str is None or str(deadline_str) == "":
+                is_deadline_designated = False
+            print(content, assignee, deadline_str, department, status)
+
+            # notion api を叩いてタスクを登録
+            notion_url = 'https://api.notion.com/v1/pages'
+            text = "タスクを登録しました\n"
+            text += f"タスク名: {content}\n"
+            text += f"ステータス: {status}\n"
+            headers = {
+                    'Authorization': 'Bearer %s' % NOTION_TOKEN,
+                    'Notion-Version': '2022-06-28',
+                    'Content-Type': 'application/json',
+                }
+            data = {
+                "parent": { "database_id": DATABASE_ID },
+                "properties": {
+                    "名前": {
+                        "title": [
+                            {"text": {"content": content}}
+                        ]
+                    },
+                    "status": {
+                        "select": { "name": status }
+                    },
+                },
+            }
+            if is_assignee_designated:
+                data["properties"]["assignee"] = {
+                    "multi_select": [
+                        {
+                            "name": assignee,
+                        }
+                    ]
+                }
+                text += f"担当者: {assignee}\n"
+            if is_department_designated:
+                data["properties"]["department"] = {
+                    "multi_select": [
+                        {
+                            "name": department
+                        }
+                    ]
+                }
+                text += f"部門: {department}\n"
+            if is_deadline_designated:
+                data["properties"]['日付'] = {
+                    "date": {
+                        "start": deadline_str
+                    }
+                }
+                text += f"期限: {deadline_str}\n"
+
+            res = requests.post(notion_url, headers=headers, json=data)
+            print(res.json())
+
         else:
             text = "Unknown command"
 
         return {
-            "type": 4, # InteractionResponseType.ChannelMessageWithSource
+            "type": 4,
             "data": {
                 "content": text
             }
         }
     else:
         return {
-            "type": 4, # InteractionResponseType.ChannelMessageWithSource
+            "type": 4,
             "data": {
                 "content": "Unknown request"
             }
         }
-
-
-def set_values_to_ss(worksheet, data_list) -> bool:
-    """
-    スプレッドシートに記入する関数
-    :param worksheet: シート
-    :param data_list: csv加工後配列
-    :return:
-    """
-    last_row = last_row = len(worksheet.col_values(1)) + 1 # 記入開始の行
-    for i in range(len(data_list)):
-        #このときはF列〜L列に記入したかったのでこのようになっているが各々編集◯
-        #worksheet.range('A1:B10')のように記入
-        cell_list = worksheet.range('A' + str(last_row) + ':D' + str(last_row))
-        for j, cell in enumerate(cell_list):
-            try:
-                cell.value = int(data_list[i][j])
-            except:
-                cell.value = data_list[i][j]
-        worksheet.update_cells(cell_list)
-        # print("process: "+str(i)+"/"+str(len(data_list)))
-        last_row += 1
-    return True
 
 
 # コマンドを受理したことを通知する関数

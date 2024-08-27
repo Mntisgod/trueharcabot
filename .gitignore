@@ -7,3 +7,6 @@
 .token
 
 gspread
+
+# pycache
+__pycache__/*
